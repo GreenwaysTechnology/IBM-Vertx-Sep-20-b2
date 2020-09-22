@@ -1,0 +1,117 @@
+Vert.x:
+.......
+
+What is Vertx?
+
+Eclipse Vert.x is a tool-kit for building reactive applications on the JVM.
+
+Vertx is functional,event driven,object oriented,reactive,non blocking io and async tookit for building "distributed application - Micro service" on java virtual machine.
+
+Vert.x is Polyglot tool kit for building micro services application.
+
+Verx allows different programming languages can talk each other.
+
+
+Polyglot means multi technology /language.
+
+ Vertx supports Polyglot on jvm.
+
+Does JVM support multi language(Polyglot)?
+
+   Yes!.
+
+2002,JCP published  specfication called "multi language" on jvm.
+ 
+Groovy, was the first reference implementation of that spec 
+Kotlin
+Jython - python + java
+
+Vetx PolyGlot
+
+You can use Vert.x with multiple languages including Java, Kotlin, JavaScript, Groovy, Ruby and Scala.
+
+Vert.x doesn't preach about what language is best — you choose the languages you want based on the task at hand and the skill-set of your team.
+
+We provide idiomatic APIs for every language that Vert.x supports.
+
+
+ How these languages works on jvm/
+   jvm contract is only "byte code"
+
+             groovy,kotlin,javascript,scala,ruby.......
+	                |
+                    compilers
+                        |
+                      .class
+                        |
+                       jvm
+
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+non blocking io and async :
+...........................
+
+IO:
+
+Hardware devices typically provide the ability to input data into the computer or output data from the computer.
+
+To simplify the ability to support a variety of hardware devices, standardized application programming interfaces (API) are used.
+
+Application programs use the "System Call API" to request one of a finite set of preset I/O requests from the Operating System.
+
+The Operating System uses algorithms for processing the request that are device independent.
+
+
+The Operating System uses another API to request data from the device driver.
+
+The device driver is third party software that knows how to interact with the specific device to perform the I/O.
+
+Sometimes we have a layering of device drivers where one device driver will call on another device driver to facilitate the I/O.
+
+ An example of this is when devices are connected to a USB port. The driver for the device will make use of the USB device driver to facilitate passing data to and from the device.
+
+
+IO SYSTEM CALL Api:
+
+Java - io api
+ |
+jvm
+jni -  io api - java native interface api , which low level api to os
+|
+os
+|
+system calls - os io api
+|
+device driver - io api
+|
+----------device
+
+
+READ-----------------|windows---read
+
+
+Socket :
+
+ It is entry and exit point of device io world.
+Socket isloates  kernal space and device drivers
+
+
+Blocking code in java:
+.....................
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
