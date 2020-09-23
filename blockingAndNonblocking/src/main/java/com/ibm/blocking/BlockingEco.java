@@ -30,7 +30,7 @@ public class BlockingEco {
                 String line = "";
                 while (!"/quit".equals(line)) {
                     line = reader.readLine();      // <2>
-                    System.out.println("~ " + line);
+                    System.out.println(Thread.currentThread().getName() + " ~ " + line);
                     writer.write(line + "\n");  // <3>
                     writer.flush();
                 }
