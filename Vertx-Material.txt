@@ -3562,22 +3562,1249 @@ ClusterManager mgr = new HazelcastClusterManager(hazelcastConfig);
     });
 &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 
+1.<dependency>
+ <groupId>io.vertx</groupId>
+ <artifactId>vertx-hazelcast</artifactId>
+ <version>3.9.3</version>
+</dependency>
+
+2.VertxOptions
+  To configure vertx Engine.
+
+C:\session\ibm\Aug\Vertx-Training\vertx-apps\src\main\java\ibm\vert\distribute\cluster>vertx run ConsumerVerticle.java -cluster
+
+
+C:\session\ibm\Aug\Vertx-Training\vertx-apps\src\main\java\ibm\vert\distribute\cluster>vertx run PublisherVerticle.java -cluster
+
+
+package com.ibm.vertx.microservices.distributed;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.DeploymentOptions;
+import io.vertx.core.Vertx;
+import io.vertx.core.VertxOptions;
+import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.eventbus.MessageConsumer;
+import io.vertx.core.spi.cluster.ClusterManager;
+import io.vertx.spi.cluster.hazelcast.HazelcastClusterManager;
+
+import java.lang.management.ManagementFactory;
+import java.lang.management.RuntimeMXBean;
+
+public class ConsumerVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    ClusterManager mgr = new HazelcastClusterManager();
+
+    VertxOptions options = new VertxOptions().setClusterManager(mgr);
+
+    Vertx.clusteredVertx(options, cluster -> {
+      if (cluster.succeeded()) {
+        DeploymentOptions deploymentOptions = new DeploymentOptions();
+        cluster.result().deployVerticle("com.ibm.vertx.microservices.distributed.ConsumerVerticle", deploymentOptions, res -> {
+          if (res.succeeded()) {
+            System.out.println("Deployment id is: " + res.result());
+          } else {
+            System.out.println("Deployment failed!");
+          }
+        });
+      } else {
+        System.out.println("Cluster up failed: " + cluster.cause());
+      }
+    });
+  }
+
+  private void consumeNews() {
+    EventBus eventBus = vertx.eventBus();
+    //Declare Consumer
+    MessageConsumer<String> consumer = eventBus.consumer("news.in.covid");
+    //handle/process the message/news
+    consumer.handler(news -> {
+      RuntimeMXBean runtimeBean = ManagementFactory.getRuntimeMXBean();
+      String jvmName = runtimeBean.getName();
+      System.out.println("Node  Name = " + jvmName);
+      long pid = Long.valueOf(jvmName.split("@")[0]);
+      System.out.println("PID  = " + pid + " Thread = " + Thread.currentThread().getName());
+      System.out.println("News 7's Today News : " + news.body());
+    });
+
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    consumeNews();
+  }
+}
+
+
+package com.ibm.vertx.microservices.distributed;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.DeploymentOptions;
+import io.vertx.core.Vertx;
+import io.vertx.core.VertxOptions;
+import io.vertx.core.spi.cluster.ClusterManager;
+import io.vertx.spi.cluster.hazelcast.HazelcastClusterManager;
+import java.lang.management.ManagementFactory;
+import java.lang.management.RuntimeMXBean;
+
+public class PublisherVerticle extends AbstractVerticle {
+
+  public static void main(String[] args) {
+    ClusterManager mgr = new HazelcastClusterManager();
+    VertxOptions options = new VertxOptions().setClusterManager(mgr);
+
+    Vertx.clusteredVertx(options, vertxAsyncResult -> {
+      if (vertxAsyncResult.succeeded()) {
+        //deploy verticles on cluster env.
+        DeploymentOptions deploymentOptions = new DeploymentOptions();
+        vertxAsyncResult.result().deployVerticle("com.ibm.vertx.microservices.distributed.PublisherVerticle", deploymentOptions, res -> {
+          if (res.succeeded()) {
+            System.out.println("Deployment id is: " + res.result());
+          } else {
+            System.out.println("Deployment failed!");
+          }
+        });
+
+      } else {
+        System.out.println("Cluster up failed: " + vertxAsyncResult.cause());
+      }
+    });
+
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    RuntimeMXBean runtimeBean = ManagementFactory.getRuntimeMXBean();
+    String jvmName = runtimeBean.getName();
+    //processid
+    long pid = Long.valueOf(jvmName.split("@")[0]);
+    vertx.setPeriodic(5000, ar -> {
+      System.out.println("PID  = " + pid + " Thread = " + Thread.currentThread().getName());
+      //publish message
+      String news = "Last 24 hrs, 50000 covid patients in India" + " From  " + jvmName;
+      vertx.eventBus().publish("news.in.covid", news);
+    });
+
+  }
+}
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+High Availability and Fail-Over
+Vert.x allows you to run your verticles with high availability (HA) support. In that case, when a vert.x instance running a verticle dies abruptly, the verticle is migrated to another vertx instance. The vert.x instances must be in the same cluster.
+
+Automatic failover
+When vert.x runs with HA enabled, if a vert.x instance where a verticle runs fails or dies, the verticle is redeployed automatically on another vert.x instance of the cluster. We call this verticle fail-over.
+
+To run vert.x with the HA enabled, just add the -ha flag to the command line:
+
+vertx run my-verticle.java -ha
+
+
+Load balancing : Scalability
+.................................................................................
+
+what if the one verticle which was deployed down , due to various reasons.
+What if the one verticle is not enough to handle load of clients.
+
+You can scale noof  instance of Same Verticle.
+
+You set no of instances of same the verticle .
+
+Via Code
+
+DeploymentOptions deploymentOptions = new DeploymentOptions().setInstances(5);
+
+Note: No of instances can be set in cluster and non cluster mode
+
+via commandline
+
+vertx programname -cluster -instances=5
+
+//ha - cluster + loadbalancing
+vertx programname -ha -instances=5 
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+
+cluster vs ha:
+
+if you want only grouping or machines coordination use cluster
+if you want grouping and failover use ha
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+Use case : Highavailablity : scalling instances;
+
+
+
+package com.ibm.vertx.microservices.distributed;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.http.HttpServer;
+
+public class HighAvailabilityVerticle extends AbstractVerticle {
+  @Override
+  public void start() throws Exception {
+    super.start();
+    HttpServer server = vertx.createHttpServer();
+    long instanceName = this.getClass().hashCode();
+
+    server.requestHandler(req -> {
+      long id = Thread.currentThread().getId();
+      req.response().end("<h1> I am coming from " + id + " Instance " + instanceName);
+    });
+
+    server.listen(8888, "localhost", handler -> {
+      if (handler.succeeded()) {
+        System.out.println("Server is Ready! " + Thread.currentThread().getId() + " " + instanceName);
+      } else {
+        System.out.println("Server failed to Start");
+      }
+    });
+  }
+}
+
+How to run?
+vertx run HighAvailabilityVerticle.java -instances=5
+
+
+
+Via Code:
+package com.ibm.vertx.microservices.distributed;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.DeploymentOptions;
+import io.vertx.core.http.HttpServer;
+import io.vertx.example.util.Runner;
+
+public class HighAvailablityDeployer extends AbstractVerticle {
+  public static void main(String[] args) {
+    Runner.runExample(HighAvailablityDeployer.class);
+  }
+  @Override
+  public void start() throws Exception {
+    super.start();
+    DeploymentOptions options = new DeploymentOptions().setInstances(5);
+    vertx.deployVerticle(HighAvailabilityVerticle.class.getName(), options);
+  }
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+
+How to enable fail-over?
+
+Steps: 
+
+Open cmd  3 command prompt
+
+1.vertx run ConsumerVerticle.java -ha -hagroup g1
+2.vertx run PublisherVerticle.java -ha -hagroup g1
+3.vertx bare -hagroup g1
+
+stop publisher and see how fail over happens
+
+Using 
+Taskkill /PID 7100 /F
+
+here 7100 process id of publisher.
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+Service Discovery and Registry:
+..............................
+
+Lookup server and naming server.
+
+Data Base server which stores 'resources' :  web site address : dns server
+
+Same concept is used in distributed programming/microservices:
+-> RMI, EJB,DCOM
+
+Why Service Registry?
+
+ Registry is data base, used to store resources in centralized place.
+
+The programs and applications  are located in networks , so it is difficult to locate/search resources.
+
+Service discovery :
+
+ The process of looking up resources, called service discovery.
+
+
+Registry Server:
+ It is key-value pair database, Where you can store and "lookup"  resources.
+
+
+What we can store inside Registry Server in vertx?
+
+ Resources:
+
+Types of Resources(Services):
+.............................
+The services you can register into registry
+
+HTTP Endpoint -HttpEndPoint.createRecord
+Event Bus Service -EventBus.createRecord
+Message Source
+JDBC Data Source
+Redis Data Source
+MongoDb Data Source
+
+Shared Data / Resource:
+
+ In vertx you can store resources in centrialized place, and you share it across application.
+
+eg: you have one jdbc connection, where you will store connection object, thats where shared data comes into picture.
+
+
+Shared data architecture is "Service Discovery and Registry"
+
+Implementation:
+
+What you need?
+
+1.Registry server- where you can store all shared resources(httpendpoint,jdbcconnection,eventbus...)
+
+Vertx provides default built in Registry Server:
+...............................................
+-Key value data structure;
+  Map- implementations.
+
+Popular Registry Servers:
+.........................
+1.eureka server
+2.Apache zoo keeper
+3.Consule
+4.Kubernetes
+5.Redis
+etc....
+
+
+Core concepts:
+
+1.Record - bag - inside bag you can store any resource-store that record into registry server.
+
+Vertx Resource Storage:
+
+Vertx resources are stored in side registry by packing resouces into a object called "Record".
+
+
+Resource--->Record 
+
+Service Discovery Objects:
+
+1.Record
+2.Service
+3.ServiceDiscovery
+
+
+
+Vertx has ServiceDiscovery Instance, which helps to publish / un publish ,and discover
+services 
+
+
+ Resource--->Record  ----| Discovery.publish(record)-----ZooKeeper
+
+Operations:
+
+1.Create Record
+2.Wrap Resources into record
+3.Publish Record into Registry Server
+
+4.1.Loopkup services via Discovery
+4.2. Get Service instance
+4.3.Use that Service instance
+
+5.Unpublish the record from Registry Server.
+
+
+<dependency>
+   <groupId>io.vertx</groupId>
+   <artifactId>vertx-service-discovery</artifactId>
+   <version>3.9.2</version>
+</dependency>
+
+<dependency>
+  <groupId>io.vertx</groupId>
+  <artifactId>vertx-service-discovery-backend-zookeeper</artifactId>
+  <version>3.9.2</version>
+</dependency>
+
+
+Setup :
+
+1.download registry server from https://zookeeper.apache.org/doc/current/zookeeperStarted.html#sc_Download
+
+2.extract tar/zip file where ever the location
+
+3.create conf/zoo.cfg  from conf/zoo_sample.cfg(by copy and paste)
+
+4.Add the below entries
+
+conf/zoo.cfg
+tickTime=2000
+dataDir=/var/lib/zookeeper
+clientPort=2181
+
+5.start zoo keeper server
+  go to bin/ folder and excute zkServer.command /sh file
+
+
+package com.ibm.vertx.microservices.servicediscovery;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.json.JsonObject;
+import io.vertx.example.util.Runner;
+import io.vertx.ext.web.client.WebClient;
+import io.vertx.servicediscovery.Record;
+import io.vertx.servicediscovery.ServiceDiscovery;
+import io.vertx.servicediscovery.ServiceDiscoveryOptions;
+import io.vertx.servicediscovery.types.HttpEndpoint;
+
+class MyServer extends AbstractVerticle {
+  @Override
+  public void start() throws Exception {
+    super.start();
+    vertx.createHttpServer().requestHandler(request -> {
+      if (request.path().equals("/api/hello")) {
+        request.response().end("Hello");
+      }
+    }).listen(3000);
+  }
+}
+
+class ConsumerVerticle extends AbstractVerticle {
+  @Override
+  public void start() throws Exception {
+    super.start();
+    ServiceDiscoveryOptions discoveryOptions = new ServiceDiscoveryOptions();
+    //enable discovery server : apache zoo keeper
+    discoveryOptions.setBackendConfiguration(new JsonObject()
+      .put("connection", "127.0.0.1:2181")
+      .put("ephemeral", true)
+      .put("guaranteed", true)
+      .put("basePath", "/services/my-backend")
+    );
+    ServiceDiscovery discovery = ServiceDiscovery.create(vertx, discoveryOptions);
+
+    //Record Creation,Record type is Resource Type;storing webclient Resource into registry
+    Record httpEndPointRecord = HttpEndpoint.createRecord("myrecord", "localhost", 3000, "/api/hello");
+    //publish the Record
+    discovery.publish(httpEndPointRecord, ar -> {
+      if (ar.succeeded()) {
+        System.out.println("Successfully published ..>>>>" + ar.result().toJson());
+      } else {
+        System.out.println(" Not Published " + ar.cause());
+      }
+    });
+    //lookup the resource
+    vertx.setTimer(5000, ar -> {
+      HttpEndpoint.getWebClient(discovery, new JsonObject().put("name", "myrecord"), sar -> {
+
+        // get web client
+        WebClient webClient = sar.result();
+        webClient.get("/api/hello").send(res -> {
+          System.out.println("Response is ready!");
+          System.out.println(res.result().bodyAsString());
+          //remove /release discovery record
+          ServiceDiscovery.releaseServiceObject(discovery, webClient);
+        });
+      });
+    });
+
+  }
+}
+
+
+public class ServiceDiscoveryMainVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Runner.runExample(ServiceDiscoveryMainVerticle.class);
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    vertx.deployVerticle(new MyServer());
+    vertx.deployVerticle(new ConsumerVerticle());
+  }
+}
+
+
+Code Refeactoring:
+
+1.Service Discovery Configuration
+2.Service Discovery Instance creation
+3.Publish Resources/Record
+4.Consuming/lookup Resource/Record
+
+In the above code, we have done everthing in single file, what if i want to re use the configuration.
+
+
+lets say,
+one verticle publishes, another verticle needs consume.
+
+you can create common class, have all common configuration, reuse.
+
+
+package com.ibm.vertx.microservices.common;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.json.JsonObject;
+import io.vertx.servicediscovery.Record;
+import io.vertx.servicediscovery.ServiceDiscovery;
+import io.vertx.servicediscovery.ServiceDiscoveryOptions;
+import io.vertx.servicediscovery.types.HttpEndpoint;
+
+public class BaseMicroServiceVerticle extends AbstractVerticle {
+  //ServiceDiscovery Options which helps configure zoo keeper information
+  protected ServiceDiscoveryOptions discoveryOptions;
+  //Service Discovery Instance creation which helps publish , discover and unpublish
+  protected ServiceDiscovery discovery;
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    discoveryOptions = new ServiceDiscoveryOptions();
+    //enable discovery server : apache zoo keeper
+    discoveryOptions.setBackendConfiguration(new JsonObject()
+      .put("connection", "127.0.0.1:2181")
+      .put("ephemeral", true)
+      .put("guaranteed", true)
+      .put("basePath", "/services/my-backend")
+    );
+    discovery = ServiceDiscovery.create(vertx, discoveryOptions);
+  }
+
+  protected void publishRecord(String name, String host, boolean ssl, int port, String root) {
+    Record httpEndPointRecord = HttpEndpoint.createRecord(name,
+      ssl, host, port, root, new JsonObject());
+    //publish HttpEndpoint
+    discovery.publish(httpEndPointRecord, ar -> {
+      if (ar.succeeded()) {
+        System.out.println("Successfully published to Zookeeper...>>>>" + ar.result().toJson());
+      } else {
+        System.out.println(" Not Published " + ar.cause());
+      }
+    });
+  }
+}
+
+package com.ibm.vertx.microservices.servicediscovery;
+import com.ibm.vertx.microservices.common.BaseMicroServiceVerticle;
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.json.JsonObject;
+import io.vertx.example.util.Runner;
+import io.vertx.ext.web.client.WebClient;
+import io.vertx.servicediscovery.Record;
+import io.vertx.servicediscovery.ServiceDiscovery;
+import io.vertx.servicediscovery.ServiceDiscoveryOptions;
+import io.vertx.servicediscovery.types.HttpEndpoint;
+
+class HttpServerVerticle extends AbstractVerticle {
+  @Override
+  public void start() throws Exception {
+    super.start();
+    vertx.createHttpServer().requestHandler(request -> {
+      if (request.path().equals("/api/hello")) {
+        request.response().end("Hello");
+      }
+    }).listen(3000);
+  }
+}
+class PublisherVerticle extends BaseMicroServiceVerticle {
+  public void publish() {
+    publishRecord("hello-service", "localhost", false, 3000, "/api/hello");
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    publish();
+  }
+}
+
+class ConsumerVerticle extends BaseMicroServiceVerticle {
+  public void getRecord() {
+    vertx.setTimer(2000, ar -> {
+      //Get The Service Instance from the Service
+      HttpEndpoint.getWebClient(discovery, new JsonObject().put("name", "hello-service"), sar -> {
+        WebClient client = sar.result();
+        client.get("/api/hello").send(res -> {
+          System.out.println("Response is ready!");
+          System.out.println(res.result().bodyAsString());
+          //remove /release discovery record
+          ServiceDiscovery.releaseServiceObject(discovery, client);
+        });
+      });
+
+    });
+
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    getRecord();
+  }
+}
+
+
+public class ServiceDiscoveryMainVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Runner.runExample(ServiceDiscoveryMainVerticle.class);
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    vertx.deployVerticle(new HttpServerVerticle());
+    vertx.deployVerticle(new ConsumerVerticle());
+    vertx.deployVerticle(new PublisherVerticle());
+
+  }
+}
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+Resilence: fail fast : fault management:
+........................................
+vert.x circuit breaker
+
+<dependency>
+ <groupId>io.vertx</groupId>
+ <artifactId>vertx-circuit-breaker</artifactId>
+ <version>3.9.2</version>
+</dependency>
+
+
+CircuitBreakerOptions :
+  Tell when to open circuit, how to handle fault.
+
+
+Notes on Eg:
+
+The below code, works based on timeout.
+
+If SomeService is slow than CircuitBreaker timeout, circuit will "open",starts sending fallback message
+else cb allows to get original service response.
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+
+
+<dependency>
+ <groupId>io.vertx</groupId>
+ <artifactId>vertx-circuit-breaker</artifactId>
+ <version>3.9.2</version>
+</dependency>
+
+package com.ibm.vertx.microservices.common;
+
+import io.vertx.circuitbreaker.CircuitBreaker;
+import io.vertx.circuitbreaker.CircuitBreakerOptions;
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.json.JsonObject;
+import io.vertx.servicediscovery.Record;
+import io.vertx.servicediscovery.ServiceDiscovery;
+import io.vertx.servicediscovery.ServiceDiscoveryOptions;
+import io.vertx.servicediscovery.types.HttpEndpoint;
+
+public class BaseMicroServiceVerticle extends AbstractVerticle {
+  //ServiceDiscovery Options which helps configure zoo keeper information
+  protected ServiceDiscoveryOptions discoveryOptions;
+  //Service Discovery Instance creation which helps publish , discover and unpublish
+  protected ServiceDiscovery discovery;
+  protected CircuitBreakerOptions options;
+  protected CircuitBreaker circuitBreaker;
+
+  private void initCb() {
+    options = new CircuitBreakerOptions();
+    options.setMaxFailures(2);// no of failures will be allowed , after that , ciruit will open
+    options.setTimeout(6000); // consider a failure if the operation deos not succeed in time
+    options.setFallbackOnFailure(true); // if any failure, should i handle fallback or not
+    options.setResetTimeout(5000); // time spent in open state before attempting to retry.
+    circuitBreaker = CircuitBreaker.create("my-circuit-breaker", vertx, options);
+
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    initCb();
+    discoveryOptions = new ServiceDiscoveryOptions();
+    //enable discovery server : apache zoo keeper
+    discoveryOptions.setBackendConfiguration(new JsonObject()
+      .put("connection", "127.0.0.1:2181")
+      .put("ephemeral", true)
+      .put("guaranteed", true)
+      .put("basePath", "/services/my-backend")
+    );
+    discovery = ServiceDiscovery.create(vertx, discoveryOptions);
+  }
+
+  protected void publishRecord(String name, String host, boolean ssl, int port, String root) {
+    Record httpEndPointRecord = HttpEndpoint.createRecord(name,
+      ssl, host, port, root, new JsonObject());
+    //publish HttpEndpoint
+    discovery.publish(httpEndPointRecord, ar -> {
+      if (ar.succeeded()) {
+        System.out.println("Successfully published to Zookeeper...>>>>" + ar.result().toJson());
+      } else {
+        System.out.println(" Not Published " + ar.cause());
+      }
+    });
+  }
+}
+
+package com.ibm.vertx.microservices.resilence;
+
+import com.ibm.vertx.microservices.common.BaseMicroServiceVerticle;
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.buffer.Buffer;
+import io.vertx.example.util.Runner;
+import io.vertx.ext.web.client.HttpResponse;
+import io.vertx.ext.web.client.WebClient;
+
+class SomeServiceVerticle extends AbstractVerticle {
+
+  public void slowService() {
+    vertx.createHttpServer().requestHandler(request -> {
+      vertx.<String>executeBlocking(promise -> {
+        // Do the blocking operation in here
+        // Imagine this was a call to a blocking API to get the result
+        try {
+          Thread.sleep(5000);
+        } catch (Exception ignore) {
+        }
+        String result = "hello , i am coming late , can you wait for me?";
+        promise.complete(result);
+
+      }, res -> {
+
+        if (res.succeeded()) {
+          request.response().putHeader("content-type", "text/plain").end(res.result());
+
+        } else {
+          res.cause().printStackTrace();
+        }
+      });
+
+    }).listen(3000);
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    slowService();
+  }
+}
+
+
+public class CircuitBreakerPatternVerticle extends BaseMicroServiceVerticle {
+  public static void main(String[] args) {
+    Runner.runExample(CircuitBreakerPatternVerticle.class);
+  }
+
+  public void testCircuitBreaker() {
+    circuitBreaker.executeWithFallback(future -> {
+      //risky code
+      WebClient client = WebClient.create(vertx);
+      client.get(3000, "localhost", "/").send(ar -> {
+        // Obtain response
+        HttpResponse<Buffer> response = ar.result();
+        if (response.statusCode() != 200) {
+          future.fail("HTTP error");
+        } else {
+          future.complete(response.bodyAsString());
+        }
+      });
+    }, v -> {
+      // Executed when the circuit is opened
+      return "Hello, I am fallback";
+    }).onComplete(ar -> {
+      // Do something with the result
+      if (ar.succeeded()) {
+        System.out.println(ar.result());
+      } else {
+        System.out.println(ar.cause());
+
+      }
+    });
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    vertx.deployVerticle(new SomeServiceVerticle());
+    testCircuitBreaker();
+  }
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+Service Proxy:
+.............
+
+Cross language api access.
+To separate biz logics from verticles.
+
+
+<dependency>
+ <groupId>io.vertx</groupId>
+ <artifactId>vertx-service-proxy</artifactId>
+ <version>3.9.2</version>
+</dependency>
+<dependency>
+ <groupId>io.vertx</groupId>
+ <artifactId>vertx-codegen</artifactId>
+ <version>3.9.2</version>
+ <scope>provided</scope>
+</dependency>
+
+
+1.you have to create package-info.java file.
+
+@ModuleGen(groupPackage = "com.ibm.vertx.services", name = "greeter-service")
+package com.ibm.vertx.services;
+
+import io.vertx.codegen.annotations.ModuleGen;
+
+
+2.service interface.
+
+@ProxyGen
+@VertxGen
+interface GreeterService {
+
+  public static String ADDRESS = GreeterService.class.getName();
+
+  //api to create Service Proxy Object
+  static GreeterService createProxy(Vertx vertx, String address) {
+    return new GreeterServiceVertxEBProxy(vertx, address);
+  }
+
+  //biz apis
+  void sayHello(String name, Handler<AsyncResult<String>> handler);
+
+  @Fluent
+  GreeterService doSomething();
+}
+
+
+3.service implementation
+
+class GreeterServiceImpl implements GreeterService {
+  @Override
+  public void sayHello(String name, Handler<AsyncResult<String>> handler) {
+    handler.handle(Future.succeededFuture("Hello" + name));
+  }
+
+  @Override
+  public GreeterService doSomething() {
+    return this;
+  }
+}
+
+4.Service Registration with Event Bus.
+
+ //Service Registeration
+    GreeterService greeterService = new GreeterServiceImpl();
+    new ServiceBinder(vertx).setAddress(GreeterService.ADDRESS).register(GreeterService.class, greeterService);
+
+
+5.Service consume
+   GreeterService service = GreeterService.createProxy(vertx, GreeterService.ADDRESS);
+
+    service.sayHello("Subramanian", ar -> {
+      if (ar.succeeded()) {
+        System.out.println(ar.result());
+      }
+    });
+    service.doSomething().sayHello("Ram", ar -> {
+      if (ar.succeeded()) {
+        System.out.println(ar.result());
+      }
+    });
 
 
 
 
+package com.ibm.vertx.services;
+
+import io.vertx.codegen.annotations.Fluent;
+import io.vertx.codegen.annotations.ProxyGen;
+import io.vertx.codegen.annotations.VertxGen;
+import io.vertx.core.*;
+import io.vertx.example.util.Runner;
+import io.vertx.serviceproxy.ServiceBinder;
+
+@ProxyGen
+@VertxGen
+interface GreeterService {
+  public static String ADDRESS = GreeterService.class.getName();
+
+  //api to create Service Proxy Object
+  static GreeterService createProxy(Vertx vertx, String address) {
+    return new GreeterServiceVertxEBProxy(vertx, address);
+  }
+
+  //biz apis
+  void sayHello(String name, Handler<AsyncResult<String>> handler);
+
+  @Fluent
+  GreeterService doSomething();
+}
+
+class GreeterServiceImpl implements GreeterService {
+  @Override
+  public void sayHello(String name, Handler<AsyncResult<String>> handler) {
+    handler.handle(Future.succeededFuture("Hello" + name));
+  }
+
+  @Override
+  public GreeterService doSomething() {
+    return this;
+  }
+}
+
+class HaiVerticle extends AbstractVerticle {
+  @Override
+  public void start() throws Exception {
+    super.start();
+    //Call service
+    GreeterService service = GreeterService.createProxy(vertx, GreeterService.ADDRESS);
+
+    service.sayHello("Subramanian", ar -> {
+      if (ar.succeeded()) {
+        System.out.println(ar.result());
+      }
+    });
+    service.doSomething().sayHello("Ram", ar -> {
+      if (ar.succeeded()) {
+        System.out.println(ar.result());
+      }
+    });
+  }
+}
+
+public class ServiceProxyMain extends AbstractVerticle {
+  public static void main(String[] args) {
+    Runner.runExample(ServiceProxyMain.class);
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    //Service Registeration
+    GreeterService greeterService = new GreeterServiceImpl();
+    new ServiceBinder(vertx).setAddress(GreeterService.ADDRESS).register(GreeterService.class, greeterService);
+
+    //deploy
+    vertx.deployVerticle(new HaiVerticle());
+
+  }
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+
+Vertx Programming Style:
+
+1.future/promise - Functional style 
+2.Reactive Style -Using Rxjava
+3.Hybrid Style = Future style + reactive Style
+
+
+Reactive Programming in Vertx:
+.............................
+
+Vertx supports writing microservices and apps in reactive style , Reactive Microservice.
+
+Most of the Apis can be rxified. Converting to RxType.
+
+eg:
+if you take AbstractVerticle  which is coming from  io.vertx.core.AbstractVerticle
+ -functional style verticle
+
+if you want reactive style
+
+io.vertx.reactivex.core.AbstractVerticle - rxified api.
+
+<dependency>
+ <groupId>io.vertx</groupId>
+ <artifactId>vertx-rx-java2</artifactId>
+ <version>3.9.2</version>
+</dependency>
+
+<dependency>
+ <groupId>io.vertx</groupId>
+ <artifactId>vertx-reactive-streams</artifactId>
+ <version>3.9.2</version>
+</dependency>
 
 
 
+package com.ibm.vertx.rx;
+
+import io.vertx.example.util.Runner;
+import io.vertx.reactivex.core.AbstractVerticle;
+import io.vertx.reactivex.core.http.HttpServer;
+import io.vertx.reactivex.core.http.HttpServerResponse;
+
+class ReactiveHttpServer extends AbstractVerticle {
+  @Override
+  public void start() throws Exception {
+    super.start();
+    HttpServer httpServer = vertx.createHttpServer();
+    httpServer.requestHandler(request -> {
+      HttpServerResponse response = request.response();
+      response.end("Hello Reactive World");
+    });
+
+    httpServer.rxListen(3000).subscribe(ar -> {
+      System.out.println("Server is Listening " + ar.actualPort());
+    }, err -> {
+      System.out.println(err.getMessage());
+    });
+  }
+}
+
+
+public class ReactiveHelloWorldVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Runner.runExample(ReactiveHelloWorldVerticle.class);
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    //future / functional style
+//    vertx.deployVerticle(new ReactiveHttpServer(), asyncResult -> {
+//      if (asyncResult.succeeded()) {
+//        System.out.println(asyncResult.result());
+//      } else {
+//        System.out.println(asyncResult.cause());
+//      }
+//    });
+    //rx style
+    vertx.rxDeployVerticle(new ReactiveHttpServer())
+      .subscribe(System.out::println, System.out::println);
+  }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+
+Data Aggreegation and event bus Reactive:
+package com.ibm.vertx.rx;
+
+
+import io.reactivex.Single;
+import io.vertx.core.json.JsonObject;
+import io.vertx.example.util.Runner;
+import io.vertx.reactivex.core.AbstractVerticle;
+import io.vertx.reactivex.core.eventbus.Message;
+
+class HelloEventBusConsumerMicroservice extends AbstractVerticle {
+  @Override
+  public void start() {
+    vertx.createHttpServer()
+      .requestHandler(req -> {
+
+        Single<JsonObject> obs1 = vertx.eventBus()
+          .<JsonObject>rxRequest("hello", "Subramanian")
+          .map(Message::body);
+
+        Single<JsonObject> obs2 = vertx.eventBus()
+          .<JsonObject>rxRequest("hello", "Murugan")
+          .map(Message::body);
+
+        Single.zip(obs1, obs2, (luke, leia) ->
+          new JsonObject()
+            .put("Luke", luke.getString("message")
+              + " from " + luke.getString("served-by"))
+            .put("Leia", leia.getString("message")
+              + " from " + leia.getString("served-by"))
+        )
+          .subscribe(
+            x -> req.response().end(x.encodePrettily()),
+            t -> req.response().setStatusCode(500).end(t.getMessage())
+          );
+      })
+      .listen(8082);
+  }
+
+}
+
+class HelloEventBusMicroservice extends AbstractVerticle {
+
+  @Override
+  public void start() {
+    // Receive message from the address 'hello'
+    vertx.eventBus().<String>consumer("hello", message -> {
+      JsonObject json = new JsonObject()
+        .put("served-by", this.toString());
+      // Check whether we have received a payload in the
+      // incoming message
+      if (message.body().isEmpty()) {
+        message.reply(json.put("message", "hello"));
+      } else {
+        message.reply(json.put("message", "hello " + message.body()));
+      }
+    });
+  }
+
+}
 
 
 
+public class WebReactiveEventBusVerticle extends AbstractVerticle {
+  public static void main(String[] args) {
+    Runner.runExample(WebReactiveEventBusVerticle.class);
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    vertx.rxDeployVerticle(new HelloEventBusMicroservice()).subscribe(r->{
+      System.out.println("HelloEventBusMicroservice ");
+    });
+    vertx.rxDeployVerticle(new HelloEventBusConsumerMicroservice()).subscribe(r->{
+      System.out.println("HelloEventBusConsumerMicroservice ");
+    });
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+Reactive Web Client:
+package com.ibm.vertx.rx.webclient;
+
+import io.reactivex.Single;
+import io.vertx.core.http.HttpHeaders;
+import io.vertx.core.json.JsonObject;
+import io.vertx.example.util.Runner;
+import io.vertx.reactivex.core.AbstractVerticle;
+import io.vertx.reactivex.ext.web.Router;
+import io.vertx.reactivex.ext.web.RoutingContext;
+import io.vertx.reactivex.ext.web.client.HttpRequest;
+import io.vertx.reactivex.ext.web.client.HttpResponse;
+import io.vertx.reactivex.ext.web.client.WebClient;
+import io.vertx.reactivex.ext.web.codec.BodyCodec;
+
+class HelloConsumerMicroservice extends AbstractVerticle {
+  private WebClient client;
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    client = WebClient.create(vertx);
+
+    Router router = Router.router(vertx);
+    router.get("/").handler(this::invokeMyFirstMicroservice);
+
+    vertx.createHttpServer()
+      .requestHandler(router)
+      .rxListen(8081).subscribe(
+      httpServer -> System.out.println("Client is Running @ " + httpServer.actualPort()),
+      error -> System.out.println(error)
+    );
+  }
+
+  private void invokeMyFirstMicroservice(RoutingContext rc) {
+
+    HttpRequest<JsonObject> request1 = client
+      .get(8082, "localhost", "/Srisha")
+      .as(BodyCodec.jsonObject());
+
+    HttpRequest<JsonObject> request2 = client
+      .get(8082, "localhost", "/Subramanian")
+      .as(BodyCodec.jsonObject());
+
+    Single<HttpResponse<JsonObject>> s1 = request1.rxSend();
+    Single<HttpResponse<JsonObject>> s2 = request2.rxSend();
+
+    Single.zip(s1, s2, (apiOne, apiTwo) -> {
+      // We have the result of both request in Luke and Leia
+      return new JsonObject()
+        .put("firstName", apiOne.body().getString("message"))
+        .put("lastName", apiTwo.body().getString("message"));
+    }).subscribe(
+      x -> {
+        rc.response().end(x.encode());
+      },
+      t -> {
+        rc.response().end(new JsonObject().encodePrettily());
+      });
+  }
+
+}
+
+class HelloMicroservice extends AbstractVerticle {
+  @Override
+  public void start() {
+    Router router = Router.router(vertx);
+    router.get("/").handler(this::hello);
+    router.get("/:name").handler(this::hello);
+    vertx.createHttpServer()
+      .requestHandler(router)
+      .rxListen(8082).subscribe(server -> {
+      System.out.println("Provider is listening in " + server.actualPort());
+    });
+  }
+
+  private void hello(RoutingContext rc) {
+    String message = "hello";
+    if (rc.pathParam("name") != null) {
+      message += " " + rc.pathParam("name");
+    }
+    JsonObject json = new JsonObject().put("message", message);
+    rc.response()
+      .putHeader(HttpHeaders.CONTENT_TYPE, "application/json")
+      .end(json.encode());
+  }
+
+}
+
+public class WebClientReactiveMicroService extends AbstractVerticle {
+  public static void main(String[] args) {
+    Runner.runExample(WebClientReactiveMicroService.class);
+  }
+
+  @Override
+  public void start() throws Exception {
+    super.start();
+    vertx.rxDeployVerticle(new HelloMicroservice())
+      .subscribe(r -> System.out.println("HelloMicroservice deployed"));
+    vertx.rxDeployVerticle(new HelloConsumerMicroservice())
+      .subscribe(r -> System.out.println("HelloConsumerMicroservice deployed"));
+  }
+}
+
+# Extend vert.x image
+FROM vertx/vertx3
+#                                                       (1)
+ENV VERTICLE_NAME com.ibm.vertx.containers.HelloVerticle
+ENV VERTICLE_FILE target/vertx-apps-1.0.0-SNAPSHOT.jar
+
+# Set the location of the verticles
+ENV VERTICLE_HOME /usr/verticles
+
+EXPOSE 8080
+
+# Copy your verticle to the container                   (2)
+COPY $VERTICLE_FILE $VERTICLE_HOME/
+
+# Launch the verticle
+WORKDIR $VERTICLE_HOME
+ENTRYPOINT ["sh", "-c"]
+CMD ["exec vertx run $VERTICLE_NAME -cp $VERTICLE_HOME/*"]
 
 
+> docker build -t sample/vertx-java .
 
+> docker run -t -i -p 8080:8080 sample/vertx-java
 
-
-
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&End&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 
 
 

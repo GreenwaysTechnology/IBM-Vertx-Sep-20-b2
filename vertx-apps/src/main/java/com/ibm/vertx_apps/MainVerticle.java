@@ -7,6 +7,9 @@ public class MainVerticle extends AbstractVerticle {
 
   @Override
   public void start(Promise<Void> startPromise) throws Exception {
+    vertx.setPeriodic(1000, aLong -> {
+      System.out.println("tick#");
+    });
     vertx.createHttpServer().requestHandler(req -> {
       req.response()
         .putHeader("content-type", "text/plain")
